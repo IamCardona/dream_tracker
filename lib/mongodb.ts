@@ -1,5 +1,6 @@
-import { setServers } from "node:dns";
 import mongoose from "mongoose";
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type MongooseCache = {
   connection: typeof mongoose | null;
@@ -7,164 +8,163 @@ type MongooseCache = {
 };
 
 declare global {
+  // eslint-disable-next-line no-var
   var mongooseCache: MongooseCache | undefined;
 }
 
-function encodeCredential(value: string) {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (character) =>
-    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-}
+// ─── URI ──────────────────────────────────────────────────────────────────────
 
-function getMongoUri() {
-  const configuredUri =
-    process.env.MONGODB_URI ?? process.env.MONGODB_URL ?? process.env.url;
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_URI;
 
-  if (!configuredUri || !/^mongodb(?:\+srv)?:\/\//i.test(configuredUri)) {
-    throw new Error("A valid MongoDB connection URL is not configured.");
-  }
-
-  const username = process.env.MONGODB_USERNAME ?? process.env.username;
-  const password = process.env.MONGODB_PASSWORD ?? process.env.password;
-  const credentials = `${encodeCredential(username ?? "")}:${encodeCredential(password ?? "")}`;
-  const uriWithAuth = configuredUri.match(
-    /^(mongodb(?:\+srv)?:\/\/)([^/@]+)@(.+)$/i,
-  );
-
-  if (uriWithAuth) {
-    let decodedUserInfo = uriWithAuth[2];
-    try {
-      decodedUserInfo = decodeURIComponent(decodedUserInfo);
-    } catch {
-      throw new Error("The MongoDB connection URL contains invalid encoding.");
-    }
-
-    if (/[<>]/.test(decodedUserInfo)) {
-      if (!username || !password) {
-        throw new Error("MongoDB credentials are required to connect to Atlas.");
-      }
-
-      return `${uriWithAuth[1]}${credentials}@${uriWithAuth[3]}`;
-    }
-
-    return configuredUri;
-  }
-
-  if (username || password) {
-    if (!username || !password) {
-      throw new Error("Both MongoDB username and password must be configured.");
-    }
-
-    return configuredUri.replace(
-      /^(mongodb(?:\+srv)?:\/\/)/i,
-      `$1${credentials}@`,
+  if (!uri || !/^mongodb(?:\+srv)?:\/\//i.test(uri)) {
+    throw new Error(
+      "MONGODB_URI no está configurado o no tiene el formato correcto " +
+        "(debe comenzar con mongodb:// o mongodb+srv://).",
     );
   }
 
-  return configuredUri;
+  return uri;
 }
 
-function getDatabaseName(uri: string) {
-  const configuredName = process.env.MONGODB_DATABASE;
-  if (configuredName) return configuredName;
+// ─── Nombre de base de datos ──────────────────────────────────────────────────
 
-  const databasePath = uri.match(
+function getDatabaseName(uri: string): string {
+  if (process.env.MONGODB_DATABASE) return process.env.MONGODB_DATABASE;
+
+  const match = uri.match(
     /^mongodb(?:\+srv)?:\/\/(?:[^/@]+@)?[^/?#]+\/([^/?#]+)/i,
-  )?.[1];
+  );
 
-  if (databasePath) {
+  if (match?.[1]) {
     try {
-      return decodeURIComponent(databasePath);
+      return decodeURIComponent(match[1]);
     } catch {
-      throw new Error("The MongoDB database name contains invalid encoding.");
+      throw new Error("El nombre de la base de datos en MONGODB_URI contiene codificación inválida.");
     }
   }
 
   return "dream-tracker";
 }
 
+// ─── Detección de errores transitorios ───────────────────────────────────────
+
+const TRANSIENT_CODES = new Set([
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "EHOSTUNREACH",
+]);
+
+const TRANSIENT_PATTERN =
+  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|EHOSTUNREACH|server selection timed out|topology was destroyed/i;
+
 function isTransientConnectionError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
+  const withCode = error as Error & { code?: unknown };
 
-  const errorWithCode = error as Error & { code?: unknown };
-  if (
-    typeof errorWithCode.code === "string" &&
-    ["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND"].includes(
-      errorWithCode.code,
-    )
-  ) {
+  if (typeof withCode.code === "string" && TRANSIENT_CODES.has(withCode.code)) {
     return true;
   }
-
-  if (
-    /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|server selection timed out/i.test(
-      error.message,
-    )
-  ) {
-    return true;
-  }
-
+  if (TRANSIENT_PATTERN.test(error.message)) return true;
   return error.cause instanceof Error && isTransientConnectionError(error.cause);
 }
 
-async function connectWithRetry(uri: string) {
-  const maxAttempts = 3;
+// ─── Conexión con reintentos y backoff exponencial ───────────────────────────
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+const CONNECT_OPTIONS: mongoose.ConnectOptions = {
+  // Tiempo máximo buscando un servidor disponible en el cluster
+  serverSelectionTimeoutMS: 15_000,
+  // Tiempo máximo para establecer un socket TCP
+  connectTimeoutMS: 15_000,
+  // Tiempo máximo esperando una operación en el socket abierto
+  socketTimeoutMS: 45_000,
+  // Latidos para detectar nodos caídos rápido
+  heartbeatFrequencyMS: 10_000,
+  // Pool de conexiones: suficiente para serverless sin saturar Atlas M0
+  maxPoolSize: 10,
+  minPoolSize: 0,
+  // Reintentos automáticos de escritura (Atlas los soporta)
+  retryWrites: true,
+  // TLS requerido por Atlas
+  tls: true,
+  // Mantener el socket vivo para entornos serverless (Vercel, etc.)
+  family: 4,
+};
+
+async function connectWithRetry(uri: string): Promise<typeof mongoose> {
+  const MAX_ATTEMPTS = 3;
+  const dbName = getDatabaseName(uri);
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      return await mongoose.connect(uri, {
-        dbName: getDatabaseName(uri),
-        serverSelectionTimeoutMS: 10_000,
-      });
+      return await mongoose.connect(uri, { ...CONNECT_OPTIONS, dbName });
     } catch (error) {
-      if (attempt === maxAttempts || !isTransientConnectionError(error)) {
-        throw error;
-      }
+      const isLast = attempt === MAX_ATTEMPTS;
+      const isTransient = isTransientConnectionError(error);
 
-      await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+      console.error(
+        `MongoDB: intento ${attempt}/${MAX_ATTEMPTS} fallido.`,
+        isTransient ? "(error transitorio)" : "(error permanente)",
+        error instanceof Error ? { name: error.name, message: error.message } : error,
+      );
+
+      if (isLast || !isTransient) throw error;
+
+      // Backoff exponencial: 500 ms, 1000 ms
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
     }
   }
 
-  throw new Error("MongoDB connection attempts were exhausted.");
+  throw new Error("Se agotaron todos los intentos de conexión a MongoDB.");
 }
 
-const cache = globalThis.mongooseCache ?? {
+// ─── Cache global (sobrevive hot-reload en desarrollo) ────────────────────────
+
+const cache: MongooseCache = globalThis.mongooseCache ?? {
   connection: null,
   promise: null,
 };
-
 globalThis.mongooseCache = cache;
 
-export async function connectToDatabase() {
+// ─── Función principal exportada ─────────────────────────────────────────────
+
+export async function connectToDatabase(): Promise<typeof mongoose> {
+  // 1. Ya hay una conexión activa y abierta — reutilizarla directamente
   if (mongoose.connection.readyState === 1) {
     cache.connection = mongoose;
     return mongoose;
   }
 
-  if (cache.promise && mongoose.connection.readyState === 2) {
-    return cache.promise;
-  }
-
-  if (mongoose.connection.readyState === 0) {
-    cache.connection = null;
-    cache.promise = null;
-  }
-
-  if (!cache.promise) {
-    const configuredDnsServers =
-      process.env.NODE_ENV === "development"
-        ? process.env.MONGODB_DNS_SERVERS
-            ?.split(",")
-            .map((server) => server.trim())
-            .filter(Boolean)
-        : undefined;
-    if (configuredDnsServers?.length) {
-      setServers(configuredDnsServers);
+  // 2. Hay un intento de conexión en curso (readyState === 2 = connecting)
+  //    Esperar la promesa existente en lugar de lanzar otra conexión paralela
+  if (cache.promise !== null) {
+    try {
+      cache.connection = await cache.promise;
+      return cache.connection;
+    } catch {
+      // Si la promesa en vuelo falló, limpiar y reintentar abajo
+      cache.promise = null;
+      cache.connection = null;
     }
-
-    const uri = getMongoUri();
-    cache.promise = connectWithRetry(uri);
   }
+
+  // 3. Sin conexión ni promesa en vuelo — desconectar limpiamente si hay
+  //    una conexión en estado "closing" o "disconnected" para evitar
+  //    que Mongoose use el socket anterior roto
+  if (mongoose.connection.readyState !== 0) {
+    try {
+      await mongoose.disconnect();
+    } catch {
+      // ignorar errores al desconectar
+    }
+  }
+
+  // 4. Lanzar nueva promesa de conexión
+  const uri = getMongoUri();
+  cache.promise = connectWithRetry(uri);
 
   try {
     cache.connection = await cache.promise;
@@ -175,3 +175,4 @@ export async function connectToDatabase() {
     throw error;
   }
 }
+
