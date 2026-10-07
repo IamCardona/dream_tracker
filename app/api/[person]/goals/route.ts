@@ -1,7 +1,8 @@
 import { connectToDatabase } from "@/lib/mongodb";
 import { validateGoalInput } from "@/lib/goal-validation";
 import { databaseUnavailable } from "@/lib/database-error";
-import Goal, { type GoalPerson } from "@/models/goal";
+import { serializeGoal } from "@/lib/goal-serializer";
+import Goal, { isGoalPerson } from "@/models/goal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,10 +10,6 @@ export const dynamic = "force-dynamic";
 type RouteContext = {
   params: Promise<{ person: string }>;
 };
-
-function isGoalPerson(person: string): person is GoalPerson {
-  return person === "abigail" || person === "iam";
-}
 
 export async function GET(_request: Request, { params }: RouteContext) {
   const { person } = await params;
@@ -22,13 +19,8 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goals = await Goal.find({ person }).sort({ updatedAt: -1 }).lean();
-    return Response.json({
-      goals: goals.map(({ _id, ...goal }) => ({
-        ...goal,
-        id: _id.toString(),
-      })),
-    });
+    const goals = await Goal.find({ person }).sort({ updatedAt: -1 });
+    return Response.json({ goals: goals.map(serializeGoal) });
   } catch (error) {
     return databaseUnavailable("load", error);
   }
@@ -54,20 +46,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.create({ ...validation.value, person });
-    return Response.json(
-      {
-        goal: {
-          id: goal._id.toString(),
-          emoji: goal.emoji,
-          name: goal.name,
-          dueDate: goal.dueDate,
-          successDefinition: goal.successDefinition,
-          color: goal.color,
-        },
-      },
-      { status: 201 },
-    );
+    const goal = await Goal.create({ ...validation.value, person, stages: [] });
+    return Response.json({ goal: serializeGoal(goal) }, { status: 201 });
   } catch (error) {
     return databaseUnavailable("create", error);
   }

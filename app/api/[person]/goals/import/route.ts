@@ -1,7 +1,8 @@
 import { databaseUnavailable } from "@/lib/database-error";
 import { connectToDatabase } from "@/lib/mongodb";
 import { validateGoalInput } from "@/lib/goal-validation";
-import Goal, { type GoalPerson } from "@/models/goal";
+import { serializeGoal } from "@/lib/goal-serializer";
+import Goal, { isGoalPerson } from "@/models/goal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,10 +10,6 @@ export const dynamic = "force-dynamic";
 type RouteContext = {
   params: Promise<{ person: string }>;
 };
-
-function isGoalPerson(person: string): person is GoalPerson {
-  return person === "abigail" || person === "iam";
-}
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { person } = await params;
@@ -80,13 +77,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     await connectToDatabase();
     if (operations.length > 0) await Goal.bulkWrite(operations);
 
-    const goals = await Goal.find({ person }).sort({ updatedAt: -1 }).lean();
-    return Response.json({
-      goals: goals.map(({ _id, ...goal }) => ({
-        ...goal,
-        id: _id.toString(),
-      })),
-    });
+    const goals = await Goal.find({ person }).sort({ updatedAt: -1 });
+    return Response.json({ goals: goals.map(serializeGoal) });
   } catch (error) {
     return databaseUnavailable("migrate locally saved", error);
   }

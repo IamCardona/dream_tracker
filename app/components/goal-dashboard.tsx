@@ -2,32 +2,29 @@
 
 import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
-
-type Goal = {
-  id: string;
-  emoji: string;
-  name: string;
-  dueDate: string;
-  successDefinition: string;
-  color: string;
-};
+import {
+  expandHexColor,
+  formatDueDate,
+  getGoalProgress,
+  getLocalDate,
+  getStageProgress,
+  isGoalList,
+  type Goal,
+  type GoalTheme,
+} from "@/lib/goal-types";
 
 type GoalDashboardProps = {
   personName: string;
-  theme: "abigail" | "iam";
+  theme: GoalTheme;
 };
 
-type GoalForm = Omit<Goal, "id">;
+type GoalForm = Omit<Goal, "id" | "stages">;
 
-const emptyForm: GoalForm = {
-  emoji: "",
-  name: "",
-  dueDate: "",
-  successDefinition: "",
-  color: "#7C6EF6",
-};
-
-function isGoalList(value: unknown): value is Goal[] {
+/**
+ * Goals saved in localStorage by older versions of the app have no `stages`
+ * field, so they need a looser guard than the current API payload shape.
+ */
+function isLegacyGoalList(value: unknown): boolean {
   return (
     Array.isArray(value) &&
     value.every((goal: unknown) => {
@@ -47,25 +44,13 @@ function isGoalList(value: unknown): value is Goal[] {
   );
 }
 
-function expandHexColor(color: string) {
-  return color.length === 4
-    ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
-    : color;
-}
-
-function getLocalDate() {
-  const today = new Date();
-  const offset = today.getTimezoneOffset();
-  return new Date(today.getTime() - offset * 60_000).toISOString().slice(0, 10);
-}
-
-function formatDueDate(date: string) {
-  return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
+const emptyForm: GoalForm = {
+  emoji: "",
+  name: "",
+  dueDate: "",
+  successDefinition: "",
+  color: "#7C6EF6",
+};
 
 export default function GoalDashboard({
   personName,
@@ -116,11 +101,11 @@ export default function GoalDashboard({
           );
           if (legacyGoalsJson) {
             const legacyGoals: unknown = JSON.parse(legacyGoalsJson);
-            if (!isGoalList(legacyGoals)) {
+            if (!isLegacyGoalList(legacyGoals)) {
               throw new Error("Previously saved browser goals have an invalid format.");
             }
 
-            if (legacyGoals.length > 0) {
+            if ((legacyGoals as unknown[]).length > 0) {
               const migrationResponse = await fetch(`/api/${theme}/goals/import`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -231,12 +216,11 @@ export default function GoalDashboard({
             : "This goal could not be saved. Please try again.",
         );
       }
-      const savedGoals = [payload.goal];
-      if (!isGoalList(savedGoals)) {
+      if (!isGoalList([payload.goal])) {
         throw new Error("The cloud database returned an invalid goal response.");
       }
 
-      const savedGoal = savedGoals[0];
+      const [savedGoal] = [payload.goal] as Goal[];
       setGoals((currentGoals) =>
         editingGoalId
           ? currentGoals.map((goal) => (goal.id === editingGoalId ? savedGoal : goal))
@@ -311,27 +295,74 @@ export default function GoalDashboard({
         ) : goals.length > 0 ? (
           <ul className="goal-list">
             {goals.map((goal) => (
-              <li className="goal-list-item" key={goal.id}>
-                <button
+              <li
+                className="goal-list-item"
+                key={goal.id}
+                style={{ "--goal-color": goal.color } as CSSProperties}
+              >
+                <Link
                   className="goal-card"
-                  type="button"
-                  aria-label={`Edit goal: ${goal.name}`}
-                  title={`Edit ${goal.name}`}
-                  onClick={() => openEditModal(goal)}
-                  style={{ "--goal-color": goal.color } as CSSProperties}
+                  href={`/${theme}/goals/${goal.id}`}
+                  aria-label={`Open goal: ${goal.name}`}
+                  title={`Open ${goal.name}`}
                 >
                   <span className="goal-emoji" aria-hidden="true">{goal.emoji}</span>
                   <span className="goal-copy">
                     <span className="goal-name">{goal.name}</span>
                     <span className="goal-success">{goal.successDefinition}</span>
+
+                    {goal.stages.length > 0 && (
+                      <span className="goal-stage-bars">
+                        {goal.stages.map((stage) => {
+                          const stageProgress = getStageProgress(stage);
+                          return (
+                            <span
+                              className="goal-stage-bar"
+                              key={stage.id}
+                              title={`${stage.name}: ${stageProgress}%`}
+                            >
+                              <span className="goal-stage-bar-label">{stage.name}</span>
+                              <span className="progress-track progress-track--mini">
+                                <span
+                                  className="progress-fill"
+                                  style={{ width: `${stageProgress}%` }}
+                                />
+                              </span>
+                            </span>
+                          );
+                        })}
+                      </span>
+                    )}
                   </span>
+
                   <span className="goal-card-details">
                     <time className="goal-date" dateTime={goal.dueDate}>
                       <span className="goal-date-label">DUE DATE</span>
                       {formatDueDate(goal.dueDate)}
                     </time>
-                    <span className="goal-edit-hint">EDIT ↗</span>
+                    <span className="goal-progress-chip">
+                      {getGoalProgress(goal)}% done
+                    </span>
+                    <span className="goal-open-hint">OPEN ↗</span>
                   </span>
+                </Link>
+
+                <button
+                  className="goal-edit-button"
+                  type="button"
+                  aria-label={`Edit goal: ${goal.name}`}
+                  title={`Edit ${goal.name}`}
+                  onClick={() => openEditModal(goal)}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path
+                      d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3Z"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.7"
+                    />
+                  </svg>
                 </button>
               </li>
             ))}
