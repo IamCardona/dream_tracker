@@ -136,13 +136,28 @@ const cache = globalThis.mongooseCache ?? {
 globalThis.mongooseCache = cache;
 
 export async function connectToDatabase() {
-  if (cache.connection) return cache.connection;
+  if (mongoose.connection.readyState === 1) {
+    cache.connection = mongoose;
+    return mongoose;
+  }
+
+  if (cache.promise && mongoose.connection.readyState === 2) {
+    return cache.promise;
+  }
+
+  if (mongoose.connection.readyState === 0) {
+    cache.connection = null;
+    cache.promise = null;
+  }
 
   if (!cache.promise) {
-    const configuredDnsServers = process.env.MONGODB_DNS_SERVERS
-      ?.split(",")
-      .map((server) => server.trim())
-      .filter(Boolean);
+    const configuredDnsServers =
+      process.env.NODE_ENV === "development"
+        ? process.env.MONGODB_DNS_SERVERS
+            ?.split(",")
+            .map((server) => server.trim())
+            .filter(Boolean)
+        : undefined;
     if (configuredDnsServers?.length) {
       setServers(configuredDnsServers);
     }
@@ -156,6 +171,7 @@ export async function connectToDatabase() {
     return cache.connection;
   } catch (error) {
     cache.promise = null;
+    cache.connection = null;
     throw error;
   }
 }

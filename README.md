@@ -24,7 +24,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 Goals are stored in the `goals` collection in MongoDB Atlas. The server reads the Atlas connection URL from `MONGODB_URI`, `MONGODB_URL`, or `url`, and credentials from `MONGODB_USERNAME` / `MONGODB_PASSWORD` or `username` / `password`. If the connection URL does not select a database, goals are stored in `dream-tracker`; set `MONGODB_DATABASE` to choose another database. Keep these values in `.env` locally and in your hosting provider's server-side environment settings; never expose them with a `NEXT_PUBLIC_` variable.
 
-If Node.js cannot resolve Atlas SRV records while the operating system can, set the optional `MONGODB_DNS_SERVERS` variable to a comma-separated list of DNS server IP addresses for that runtime. Use a DNS server appropriate to each environment; do not copy a local network resolver into production settings.
+If Node.js cannot resolve Atlas SRV records in local development while the operating system can, set the optional `MONGODB_DNS_SERVERS` variable to a comma-separated list of DNS server IP addresses for that development machine. The application intentionally ignores this variable in production, where the hosting provider's DNS resolver should be used. Never copy a private local network resolver into production settings.
 
 The MongoDB database user needs permission to read and write the selected database, and the application host must be allowed in the Atlas network access list. Goal API endpoints are `/api/{person}/goals` for listing and creating goals, `/api/{person}/goals/{goalId}` for editing one, and `/api/{person}/goals/import` for migrating existing browser-saved goals. Valid profiles are `abigail` and `iam`.
 
