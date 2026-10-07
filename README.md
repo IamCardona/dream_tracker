@@ -20,6 +20,16 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## MongoDB Atlas
+
+Goals are stored in the `goals` collection in MongoDB Atlas. The server reads the Atlas connection URL from `MONGODB_URI`, `MONGODB_URL`, or `url`, and credentials from `MONGODB_USERNAME` / `MONGODB_PASSWORD` or `username` / `password`. If the connection URL does not select a database, goals are stored in `dream-tracker`; set `MONGODB_DATABASE` to choose another database. Keep these values in `.env` locally and in your hosting provider's server-side environment settings; never expose them with a `NEXT_PUBLIC_` variable.
+
+If Node.js cannot resolve Atlas SRV records while the operating system can, set the optional `MONGODB_DNS_SERVERS` variable to a comma-separated list of DNS server IP addresses for that runtime. Use a DNS server appropriate to each environment; do not copy a local network resolver into production settings.
+
+The MongoDB database user needs permission to read and write the selected database, and the application host must be allowed in the Atlas network access list. Goal API endpoints are `/api/{person}/goals` for listing and creating goals, `/api/{person}/goals/{goalId}` for editing one, and `/api/{person}/goals/import` for migrating existing browser-saved goals. Valid profiles are `abigail` and `iam`.
+
+The goal API does not include user authentication. Protect the app with an authentication layer before making it publicly accessible.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
