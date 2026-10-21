@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import {
   useCallback,
   useEffect,
@@ -8,9 +9,16 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ChangeEvent,
   type DragEvent,
   type FormEvent,
 } from "react";
+import {
+  createTaskCsv,
+  createTaskCsvTemplate,
+  parseTaskCsv,
+  type CsvTask,
+} from "@/lib/task-csv";
 import {
   formatDueDate,
   getGoalProgress,
@@ -34,6 +42,7 @@ type TaskForm = { name: string; description: string; dueDate: string };
 
 const emptyStageForm: StageForm = { name: "", description: "" };
 const emptyTaskForm: TaskForm = { name: "", description: "", dueDate: "" };
+type TaskImportMode = "replace" | "append";
 
 /** Tracks which stage/task is being edited inside each dialog. */
 type TaskDialogState = { stageId: string; taskId: string | null } | null;
@@ -52,6 +61,13 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
   const [taskDialog, setTaskDialog] = useState<TaskDialogState>(null);
   const [taskForm, setTaskForm] = useState<TaskForm>(emptyTaskForm);
   const [formError, setFormError] = useState("");
+  const [importStageId, setImportStageId] = useState<string | null>(null);
+  const [importTasks, setImportTasks] = useState<CsvTask[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importMode, setImportMode] = useState<TaskImportMode>("append");
+  const [importError, setImportError] = useState("");
+  const [isParsingImport, setIsParsingImport] = useState(false);
+  const [isImportingTasks, setIsImportingTasks] = useState(false);
 
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
   const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
@@ -60,6 +76,18 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
 
   const basePath = `/api/${theme}/goals/${goalId}`;
   const goalRef = useRef<Goal | null>(null);
+  const stageNameInputRef = useRef<HTMLInputElement>(null);
+  const taskNameInputRef = useRef<HTMLInputElement>(null);
+  const backdropPointerDownRef = useRef(false);
+
+  useEffect(() => {
+    if (stageDialog) {
+      stageNameInputRef.current?.focus({ preventScroll: true });
+    }
+    if (taskDialog) {
+      taskNameInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [stageDialog, taskDialog]);
 
   // Keep the ref in sync *after* render, never mutate it while rendering.
   useEffect(() => {
@@ -332,6 +360,118 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
       setActionError(
         error instanceof Error ? error.message : "This task could not be deleted.",
       );
+    }
+  }
+
+  function openTaskImport(stageId: string) {
+    setImportStageId(stageId);
+    setImportTasks([]);
+    setImportFileName("");
+    setImportMode("append");
+    setImportError("");
+  }
+
+  function closeTaskImport() {
+    setImportStageId(null);
+    setImportTasks([]);
+    setImportFileName("");
+    setImportError("");
+  }
+
+  async function handleTaskCsvChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    setImportTasks([]);
+    setImportFileName("");
+    setImportError("");
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setImportError("Choose a file with the .csv extension.");
+      event.currentTarget.value = "";
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setImportError("The CSV file cannot exceed 2 MB.");
+      event.currentTarget.value = "";
+      return;
+    }
+
+    setIsParsingImport(true);
+    try {
+      const tasks = parseTaskCsv(await file.text());
+      setImportTasks(tasks);
+      setImportFileName(file.name);
+    } catch (error) {
+      setImportError(
+        error instanceof Error ? error.message : "The CSV file could not be read.",
+      );
+      event.currentTarget.value = "";
+    } finally {
+      setIsParsingImport(false);
+    }
+  }
+
+  function downloadCsv(content: string, filename: string) {
+    const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  function downloadStageTasks(stage: Stage) {
+    const filename =
+      `${stage.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "stage"}-tasks.csv`;
+    downloadCsv(createTaskCsv(stage.tasks), filename);
+  }
+
+  function downloadTaskTemplate() {
+    downloadCsv(createTaskCsvTemplate(), "tasks-template.csv");
+  }
+
+  async function submitTaskImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!importStageId || importTasks.length === 0) return;
+
+    const targetStage = stages.find((stage) => stage.id === importStageId);
+    if (!targetStage) {
+      setImportError("This stage could not be found. Close the dialog and try again.");
+      return;
+    }
+
+    if (
+      importMode === "replace" &&
+      targetStage.tasks.length > 0 &&
+      !window.confirm(
+        `Replace all ${targetStage.tasks.length} current task(s) in "${targetStage.name}" with ${importTasks.length} imported task(s)?`,
+      )
+    ) {
+      return;
+    }
+
+    setIsImportingTasks(true);
+    setImportError("");
+    try {
+      const updated = await sendRequest(
+        `${basePath}/stages/${importStageId}/tasks/import`,
+        "PUT",
+        { mode: importMode, tasks: importTasks },
+        "The tasks could not be imported. Please try again.",
+      );
+      setGoal(updated);
+      closeTaskImport();
+    } catch (error) {
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : "The tasks could not be imported. Please try again.",
+      );
+    } finally {
+      setIsImportingTasks(false);
     }
   }
 
@@ -752,13 +892,33 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
                         <p className="stage-empty">No tasks in this stage yet.</p>
                       )}
 
-                      <button
-                        className="add-task-button"
-                        type="button"
-                        onClick={() => openCreateTask(stage.id)}
-                      >
-                        <span aria-hidden="true">+</span> Add task
-                      </button>
+                      <div className="stage-task-toolbar">
+                        <button
+                          className="add-task-button"
+                          type="button"
+                          onClick={() => openCreateTask(stage.id)}
+                        >
+                          <span aria-hidden="true">+</span> Add task
+                        </button>
+                        <div className="task-transfer-actions">
+                          <button
+                            className="task-tool-button"
+                            type="button"
+                            onClick={() => downloadStageTasks(stage)}
+                            aria-label={`Download tasks for ${stage.name} as CSV`}
+                          >
+                            <span aria-hidden="true">↓</span> Export CSV
+                          </button>
+                          <button
+                            className="task-tool-button"
+                            type="button"
+                            onClick={() => openTaskImport(stage.id)}
+                            aria-label={`Import tasks from CSV into ${stage.name}`}
+                          >
+                            <span aria-hidden="true">↑</span> Import CSV
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </li>
@@ -768,8 +928,23 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
         )}
       </section>
 
-      {stageDialog && (
-        <div className="goal-modal-backdrop" onClick={closeStageDialog}>
+      {stageDialog &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={`goal-modal-backdrop goal-modal-backdrop--${theme}`}
+            style={{ "--goal-color": goal.color } as CSSProperties}
+            onPointerDown={(event) => {
+              backdropPointerDownRef.current = event.target === event.currentTarget;
+            }}
+            onClick={(event) => {
+              const clickedBackdrop =
+                backdropPointerDownRef.current &&
+                event.target === event.currentTarget;
+              backdropPointerDownRef.current = false;
+              if (clickedBackdrop) closeStageDialog();
+            }}
+          >
           <section
             className="goal-modal stage-modal"
             role="dialog"
@@ -802,7 +977,7 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
               <label className="goal-field">
                 <span>Stage name</span>
                 <input
-                  autoFocus
+                  ref={stageNameInputRef}
                   type="text"
                   name="stageName"
                   placeholder="e.g. Research and planning"
@@ -851,11 +1026,27 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
               </div>
             </form>
           </section>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
-      {taskDialog && (
-        <div className="goal-modal-backdrop" onClick={closeTaskDialog}>
+      {taskDialog &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={`goal-modal-backdrop goal-modal-backdrop--${theme}`}
+            style={{ "--goal-color": goal.color } as CSSProperties}
+            onPointerDown={(event) => {
+              backdropPointerDownRef.current = event.target === event.currentTarget;
+            }}
+            onClick={(event) => {
+              const clickedBackdrop =
+                backdropPointerDownRef.current &&
+                event.target === event.currentTarget;
+              backdropPointerDownRef.current = false;
+              if (clickedBackdrop) closeTaskDialog();
+            }}
+          >
           <section
             className="goal-modal stage-modal"
             role="dialog"
@@ -888,7 +1079,7 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
               <label className="goal-field">
                 <span>Task name</span>
                 <input
-                  autoFocus
+                  ref={taskNameInputRef}
                   type="text"
                   name="taskName"
                   placeholder="e.g. Book the training plan"
@@ -950,9 +1141,139 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
               </div>
             </form>
           </section>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
+
+      {importStageId &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={`goal-modal-backdrop goal-modal-backdrop--${theme}`}
+            style={{ "--goal-color": goal.color } as CSSProperties}
+            onPointerDown={(event) => {
+              backdropPointerDownRef.current = event.target === event.currentTarget;
+            }}
+            onClick={(event) => {
+              const clickedBackdrop =
+                backdropPointerDownRef.current &&
+                event.target === event.currentTarget;
+              backdropPointerDownRef.current = false;
+              if (clickedBackdrop) closeTaskImport();
+            }}
+          >
+            <section
+              className="goal-modal stage-modal task-import-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="task-import-title"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") closeTaskImport();
+              }}
+            >
+              <div className="goal-modal-heading">
+                <div>
+                  <p className="profile-eyebrow">STAGE TASKS</p>
+                  <h2 id="task-import-title">Import tasks from CSV</h2>
+                  <p>Choose how to apply your task list to this stage.</p>
+                </div>
+                <button
+                  className="modal-close"
+                  type="button"
+                  aria-label="Close dialog"
+                  onClick={closeTaskImport}
+                >
+                  ×
+                </button>
+              </div>
+
+              <form className="stack-form" onSubmit={submitTaskImport}>
+                <fieldset className="task-import-options">
+                  <legend>When importing</legend>
+                  <label className="task-import-option">
+                    <input
+                      type="radio"
+                      name="task-import-mode"
+                      value="append"
+                      checked={importMode === "append"}
+                      onChange={() => setImportMode("append")}
+                    />
+                    <span className="task-import-option-copy">
+                      <strong>Add new tasks</strong>
+                      <span>Keep current tasks and add the CSV tasks after them.</span>
+                    </span>
+                  </label>
+                  <label className="task-import-option">
+                    <input
+                      type="radio"
+                      name="task-import-mode"
+                      value="replace"
+                      checked={importMode === "replace"}
+                      onChange={() => setImportMode("replace")}
+                    />
+                    <span className="task-import-option-copy">
+                      <strong>Overwrite all current tasks</strong>
+                      <span>Replace this stage’s task list with the CSV tasks.</span>
+                    </span>
+                  </label>
+                </fieldset>
+
+                <label className="task-import-file">
+                  <span>CSV file</span>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleTaskCsvChange}
+                    disabled={isParsingImport || isImportingTasks}
+                  />
+                  <span className="task-import-hint">
+                    Columns: name, description, dueDate (YYYY-MM-DD), isCompleted (true/false).
+                    Maximum file size: 2 MB.
+                  </span>
+                </label>
+
+                {isParsingImport && <p className="task-import-status">Reading CSV…</p>}
+                {importFileName && (
+                  <p className="task-import-status" role="status">
+                    {importFileName} · {importTasks.length} task(s) ready to import.
+                  </p>
+                )}
+                {importError && (
+                  <p className="storage-error form-error" role="alert">{importError}</p>
+                )}
+
+                <div className="task-import-footer">
+                  <button
+                    className="task-template-button"
+                    type="button"
+                    onClick={downloadTaskTemplate}
+                  >
+                    <span aria-hidden="true">↓</span> Download CSV template
+                  </button>
+                  <div className="goal-form-actions">
+                    <button
+                      className="cancel-goal-button"
+                      type="button"
+                      onClick={closeTaskImport}
+                      disabled={isImportingTasks}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="save-goal-button"
+                      type="submit"
+                      disabled={isParsingImport || isImportingTasks || importTasks.length === 0}
+                    >
+                      {isImportingTasks ? "Importing…" : "Import tasks"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </section>
+          </div>,
+          document.body,
+        )}
     </main>
   );
 }
-

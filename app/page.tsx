@@ -31,6 +31,12 @@ export default function Home() {
               ↗
             </span>
           </Link>
+          <Link className="choice-button choice-button--fanny" href="/fanny">
+            <span>Fanny</span>
+            <span className="button-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </Link>
         </div>
       </section>
     </main>

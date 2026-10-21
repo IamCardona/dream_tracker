@@ -148,6 +148,12 @@ button {
   animation: button-in 650ms 240ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
+.choice-button--fanny {
+  background: linear-gradient(115deg, #d05b91 0%, #8656d8 100%);
+  box-shadow: 0 12px 25px rgb(178 83 172 / 28%);
+  animation: button-in 650ms 360ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
 .button-arrow {
   position: absolute;
   right: 24px;
@@ -239,6 +245,14 @@ button {
   background:
     radial-gradient(ellipse at 50% 48%, #fff 0%, transparent 54%),
     linear-gradient(135deg, #f7f5fa 0%, #efedf4 58%, #faf4f1 100%);
+}
+
+.profile-page--fanny {
+  --profile-accent: #b34f91;
+  --profile-accent-soft: rgb(179 79 145 / 13%);
+  background:
+    radial-gradient(ellipse at 50% 48%, #fff 0%, transparent 54%),
+    linear-gradient(135deg, #fff5fb 0%, #f9eff9 58%, #f4f1ff 100%);
 }
 
 .profile-glow {
@@ -714,6 +728,9 @@ button {
 }
 
 .goal-modal-backdrop {
+  --profile-accent: #5574ed;
+  --profile-accent-soft: rgb(85 116 237 / 13%);
+
   position: fixed;
   z-index: 5;
   inset: 0;
@@ -724,6 +741,16 @@ button {
   background: rgb(22 23 38 / 48%);
   backdrop-filter: blur(9px);
   animation: fade-in 180ms ease both;
+}
+
+.goal-modal-backdrop--iam {
+  --profile-accent: #292938;
+  --profile-accent-soft: rgb(95 89 142 / 12%);
+}
+
+.goal-modal-backdrop--fanny {
+  --profile-accent: #b34f91;
+  --profile-accent-soft: rgb(179 79 145 / 13%);
 }
 
 .goal-modal {
@@ -1598,6 +1625,170 @@ button {
   background: color-mix(in srgb, var(--goal-color) 8%, white);
 }
 
+.stage-task-toolbar,
+.task-transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.task-transfer-actions {
+  gap: 7px;
+}
+
+.task-tool-button,
+.task-template-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--goal-color) 22%, #e2e2eb);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--goal-color) 5%, white);
+  color: color-mix(in srgb, var(--goal-color) 75%, #262638);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.task-tool-button:hover,
+.task-template-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--goal-color) 45%, white);
+  background: color-mix(in srgb, var(--goal-color) 10%, white);
+}
+
+.task-import-modal {
+  width: min(100%, 620px);
+}
+
+.task-import-options {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.task-import-options legend,
+.task-import-file > span:first-child {
+  margin-bottom: 9px;
+  color: #444655;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.task-import-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 14px;
+  border: 1px solid rgb(34 35 53 / 10%);
+  border-radius: 15px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.task-import-option:has(input:checked) {
+  border-color: color-mix(in srgb, var(--goal-color) 55%, white);
+  background: color-mix(in srgb, var(--goal-color) 6%, white);
+}
+
+.task-import-option input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: var(--goal-color);
+}
+
+.task-import-option-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.task-import-option-copy strong {
+  color: #282938;
+  font-size: 0.88rem;
+}
+
+.task-import-option-copy > span,
+.task-import-hint {
+  color: #737585;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.task-import-file {
+  display: grid;
+  gap: 8px;
+  color: #444655;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.task-import-file input[type="file"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed color-mix(in srgb, var(--goal-color) 34%, #c7c7d3);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--goal-color) 3%, white);
+  color: #555767;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.task-import-file input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--goal-color) 13%, white);
+  color: color-mix(in srgb, var(--goal-color) 75%, #262638);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.task-import-hint {
+  font-weight: 400;
+}
+
+.task-import-status {
+  margin: 0;
+  color: color-mix(in srgb, var(--goal-color) 75%, #262638);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.task-import-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-import-footer .goal-form-actions {
+  margin: 0;
+}
+
+.task-template-button {
+  min-height: 42px;
+  padding: 0 13px;
+}
+
 .stack-form {
   display: grid;
   gap: 16px;
@@ -1793,7 +1984,6 @@ button {
   }
 
   .goal-modal-backdrop {
-    align-items: end;
     padding: 12px;
   }
 
@@ -1856,6 +2046,23 @@ button {
 
   .stage-actions {
     flex-wrap: wrap;
+  }
+
+  .stage-task-toolbar,
+  .task-import-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .task-transfer-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-transfer-actions .task-tool-button,
+  .stage-task-toolbar > .add-task-button,
+  .task-import-footer > .task-template-button {
+    width: 100%;
   }
 
   .task-row {

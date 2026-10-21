@@ -1,9 +1,9 @@
 import mongoose, { Schema, type Model, type Types } from "mongoose";
 
-export type GoalPerson = "abigail" | "iam";
+export type GoalPerson = "abigail" | "iam" | "fanny";
 
 export function isGoalPerson(person: string): person is GoalPerson {
-  return person === "abigail" || person === "iam";
+  return person === "abigail" || person === "iam" || person === "fanny";
 }
 
 export interface TaskItem {
@@ -101,7 +101,7 @@ const goalSchema = new Schema<GoalDocument>(
   {
     person: {
       type: String,
-      enum: ["abigail", "iam"],
+      enum: ["abigail", "iam", "fanny"],
       required: true,
       index: true,
     },

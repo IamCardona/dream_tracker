@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { createPortal } from "react-dom";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 import {
   expandHexColor,
   formatDueDate,
@@ -65,6 +72,14 @@ export default function GoalDashboard({
   const [form, setForm] = useState<GoalForm>(emptyForm);
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const goalEmojiInputRef = useRef<HTMLInputElement>(null);
+  const backdropPointerDownRef = useRef(false);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      goalEmojiInputRef.current?.focus({ preventScroll: true });
+    }
+  }, [isModalOpen]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -379,8 +394,22 @@ export default function GoalDashboard({
         )}
       </section>
 
-      {isModalOpen && (
-        <div className="goal-modal-backdrop" onClick={closeModal}>
+      {isModalOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={`goal-modal-backdrop goal-modal-backdrop--${theme}`}
+            onPointerDown={(event) => {
+              backdropPointerDownRef.current = event.target === event.currentTarget;
+            }}
+            onClick={(event) => {
+              const clickedBackdrop =
+                backdropPointerDownRef.current &&
+                event.target === event.currentTarget;
+              backdropPointerDownRef.current = false;
+              if (clickedBackdrop) closeModal();
+            }}
+          >
           <section
             className="goal-modal"
             role="dialog"
@@ -419,7 +448,7 @@ export default function GoalDashboard({
               <label className="goal-field goal-field--emoji">
                 <span>Emoji</span>
                 <input
-                  autoFocus
+                  ref={goalEmojiInputRef}
                   type="text"
                   name="emoji"
                   placeholder="🌱"
@@ -501,8 +530,9 @@ export default function GoalDashboard({
               </div>
             </form>
           </section>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </main>
   );
 }

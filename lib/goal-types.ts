@@ -1,4 +1,4 @@
-export type GoalTheme = "abigail" | "iam";
+export type GoalTheme = "abigail" | "iam" | "fanny";
 
 export type Task = {
   id: string;
