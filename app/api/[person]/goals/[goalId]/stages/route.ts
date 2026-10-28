@@ -39,13 +39,18 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
-    const nextOrder = goal.stages.length
-      ? Math.max(...goal.stages.map((stage) => stage.order)) + 1
+    const activeStages = goal.stages.filter((stage) => stage.is_deleted !== true);
+    const nextOrder = activeStages.length
+      ? Math.max(...activeStages.map((stage) => stage.order)) + 1
       : 0;
 
     goal.stages.push({
@@ -85,13 +90,18 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const requestedIds = validation.value;
-    const existingIds = goal.stages.map((stage) => stage._id.toString());
+    const activeStages = goal.stages.filter((stage) => stage.is_deleted !== true);
+    const existingIds = activeStages.map((stage) => stage._id.toString());
 
     // The payload must describe exactly the stages this goal owns.
     if (
@@ -104,7 +114,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       );
     }
 
-    for (const stage of goal.stages) {
+    for (const stage of activeStages) {
       stage.order = requestedIds.indexOf(stage._id.toString());
     }
 

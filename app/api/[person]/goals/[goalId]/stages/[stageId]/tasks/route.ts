@@ -35,13 +35,17 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 

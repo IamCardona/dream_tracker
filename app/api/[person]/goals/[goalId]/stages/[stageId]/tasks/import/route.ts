@@ -84,17 +84,25 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 
-    if (payload.mode === "replace") stage.tasks.splice(0, stage.tasks.length);
+    if (payload.mode === "replace") {
+      for (const task of stage.tasks) {
+        if (task.is_deleted !== true) task.is_deleted = true;
+      }
+    }
     stage.tasks.push(...tasks);
 
     await goal.save();

@@ -48,9 +48,110 @@ button {
 
 .home-content {
   z-index: 1;
-  width: min(100%, 440px);
+  width: min(100%, 820px);
   text-align: center;
   animation: rise-in 800ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.home-content .keyboard-guide {
+  margin-bottom: 30px;
+}
+
+.keyboard-guide {
+  --shortcut-accent: var(--profile-accent, #5574ed);
+  position: relative;
+  display: flex;
+  width: min(100%, 820px);
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  align-self: center;
+  overflow: hidden;
+  padding: 10px 18px;
+  border: 1px solid color-mix(in srgb, var(--shortcut-accent) 20%, white);
+  border-radius: 18px;
+  background:
+    linear-gradient(110deg, color-mix(in srgb, var(--shortcut-accent) 9%, white), rgb(255 255 255 / 90%) 55%),
+    #fff;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--shortcut-accent) 10%, transparent);
+  color: #656777;
+  font-size: 0.76rem;
+  animation:
+    keyboard-guide-in 650ms cubic-bezier(0.2, 0.75, 0.25, 1) both,
+    keyboard-guide-float 5s 900ms ease-in-out infinite;
+}
+
+.keyboard-guide::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 55%) 48%, transparent 70%);
+  content: "";
+  pointer-events: none;
+  transform: translateX(-120%);
+  animation: keyboard-guide-shine 6s 1.2s ease-in-out infinite;
+}
+
+.keyboard-guide-label,
+.keyboard-guide-list,
+.keyboard-guide-item,
+.keyboard-guide-keys {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.keyboard-guide-label {
+  flex: 0 0 auto;
+  gap: 7px;
+  color: color-mix(in srgb, var(--shortcut-accent) 78%, #262638);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.keyboard-guide-spark {
+  font-size: 0.9rem;
+  animation: twinkle 2.8s ease-in-out infinite;
+}
+
+.keyboard-guide-list {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 17px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keyboard-guide-item {
+  gap: 7px;
+  white-space: nowrap;
+  animation: keyboard-guide-item-in 450ms calc(100ms + var(--shortcut-index, 0) * 90ms) both;
+}
+
+.keyboard-guide-keys {
+  gap: 3px;
+}
+
+.keyboard-guide-item kbd {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--shortcut-accent) 23%, white);
+  border-bottom-width: 2px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 82%);
+  color: color-mix(in srgb, var(--shortcut-accent) 82%, #262638);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.67rem;
+  font-weight: 750;
+  line-height: 1;
 }
 
 .eyebrow {
@@ -96,7 +197,9 @@ button {
 
 .button-stack {
   display: grid;
+  width: min(100%, 440px);
   gap: 15px;
+  margin: 0 auto;
 }
 
 .choice-button {
@@ -237,6 +340,10 @@ button {
     radial-gradient(ellipse at 50% 48%, #fff 0%, transparent 54%),
     linear-gradient(135deg, #f5f7ff 0%, #eef1ff 58%, #f8f5ff 100%);
   animation: rise-in 700ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.profile-page > .keyboard-guide {
+  margin-bottom: 20px;
 }
 
 .profile-page--iam {
@@ -1055,6 +1162,10 @@ button {
   padding-bottom: 72px;
 }
 
+.detail-page > .keyboard-guide {
+  --shortcut-accent: var(--goal-color);
+}
+
 .detail-aura {
   position: absolute;
   z-index: -1;
@@ -1300,6 +1411,17 @@ button {
     #fff;
 }
 
+.stage-card.is-shortcut-target {
+  border-color: color-mix(in srgb, var(--goal-color) 52%, white);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--goal-color) 16%, transparent);
+}
+
+.stage-title-button:focus-visible {
+  outline: 2px solid var(--goal-color);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
 .stage-card.is-dragging {
   opacity: 0.5;
   box-shadow: 0 4px 14px rgb(30 32 60 / 6%);
@@ -1455,6 +1577,15 @@ button {
   color: #656777;
   font-size: 0.78rem;
   font-weight: 750;
+}
+
+.stage-shortcut-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--goal-color) 14%, white);
+  color: color-mix(in srgb, var(--goal-color) 75%, #262638);
+  font-size: 0.66rem;
+  white-space: nowrap;
 }
 
 .stage-complete-badge {
@@ -1891,9 +2022,62 @@ button {
   }
 }
 
+@keyframes keyboard-guide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes keyboard-guide-float {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes keyboard-guide-shine {
+  12%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes keyboard-guide-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 560px) {
   .home-shell {
     padding: 36px 24px;
+  }
+
+  .keyboard-guide {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .keyboard-guide-list {
+    justify-content: flex-start;
+    gap: 8px 13px;
+  }
+
+  .home-content .keyboard-guide {
+    margin-bottom: 24px;
   }
 
   .sparkle--one {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
+import KeyboardShortcutGuide from "./keyboard-shortcut-guide";
 import {
   useCallback,
   useEffect,
@@ -70,6 +71,7 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
   const [isImportingTasks, setIsImportingTasks] = useState(false);
 
   const [collapsedStages, setCollapsedStages] = useState<Set<string>>(new Set());
+  const [focusedStageId, setFocusedStageId] = useState<string | null>(null);
   const [draggedStageId, setDraggedStageId] = useState<string | null>(null);
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
   const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set());
@@ -78,6 +80,7 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
   const goalRef = useRef<Goal | null>(null);
   const stageNameInputRef = useRef<HTMLInputElement>(null);
   const taskNameInputRef = useRef<HTMLInputElement>(null);
+  const taskFormElementRef = useRef<HTMLFormElement>(null);
   const backdropPointerDownRef = useRef(false);
 
   useEffect(() => {
@@ -166,6 +169,38 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
     (sum, stage) => sum + stage.tasks.filter((task) => task.isCompleted).length,
     0,
   );
+
+  const shortcutStageId = stages.some((stage) => stage.id === focusedStageId)
+    ? focusedStageId
+    : stages[0]?.id ?? null;
+
+  useEffect(() => {
+    function handleTaskShortcut(event: KeyboardEvent) {
+      const isCreateTaskShortcut =
+        event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey &&
+        (event.key === "+" || event.code === "NumpadAdd");
+
+      if (!isCreateTaskShortcut) return;
+
+      if (taskDialog?.taskId === null) {
+        event.preventDefault();
+        if (!isSaving) taskFormElementRef.current?.requestSubmit();
+        return;
+      }
+
+      if (taskDialog || stageDialog || importStageId || !shortcutStageId) return;
+
+      event.preventDefault();
+      setFormError("");
+      setTaskForm(emptyTaskForm);
+      setTaskDialog({ stageId: shortcutStageId, taskId: null });
+    }
+
+    window.addEventListener("keydown", handleTaskShortcut);
+    return () => window.removeEventListener("keydown", handleTaskShortcut);
+  }, [importStageId, isSaving, shortcutStageId, stageDialog, taskDialog]);
 
   // ─── Stage dialog ──────────────────────────────────────────────────────────
   function openCreateStage() {
@@ -550,6 +585,10 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
     return (
       <main className={`profile-page profile-page--${theme} detail-page`}>
         <div className="profile-glow" aria-hidden="true" />
+        <KeyboardShortcutGuide
+          backHref={`/${theme}`}
+          shortcuts={[{ keys: ["Ctrl", "←"], description: "Back to goals" }]}
+        />
         <p className="empty-goals">Loading this goal...</p>
       </main>
     );
@@ -559,6 +598,10 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
     return (
       <main className={`profile-page profile-page--${theme} detail-page`}>
         <div className="profile-glow" aria-hidden="true" />
+        <KeyboardShortcutGuide
+          backHref={`/${theme}`}
+          shortcuts={[{ keys: ["Ctrl", "←"], description: "Back to goals" }]}
+        />
         <div className="empty-goals">
           <span className="empty-goals-icon" aria-hidden="true">✦</span>
           <h3>We couldn&apos;t open this goal</h3>
@@ -590,6 +633,16 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
     >
       <div className="detail-aura" aria-hidden="true" />
       <div className="detail-aura detail-aura--secondary" aria-hidden="true" />
+
+      <KeyboardShortcutGuide
+        backHref={`/${theme}`}
+        shortcuts={[
+          { keys: ["Tab"], description: "Move through stages" },
+          { keys: ["↑", "↓"], description: "Choose a stage" },
+          { keys: ["Ctrl", "←"], description: "Back to goals" },
+          { keys: ["Ctrl", "+"], description: "Open task form; press again to save" },
+        ]}
+      />
 
       <header className="detail-header">
         <Link
@@ -674,7 +727,8 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
         <div className="stages-intro">
           <h2 className="stages-heading" id="stages-heading">Stages</h2>
           <p className="stages-description">
-            Break this dream into blocks. Drag a stage to reorder your roadmap.
+            Use Tab or the arrow keys to select a stage for Ctrl + +. The first stage is
+            selected by default. Click a title to expand or collapse it.
           </p>
         </div>
 
@@ -688,11 +742,12 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
             </button>
           </div>
         ) : (
-          <ol className="stage-list">
+          <ol className="stage-list" data-keyboard-menu>
             {stages.map((stage, index) => {
               const progress = getStageProgress(stage);
               const isCollapsed = collapsedStages.has(stage.id);
               const isComplete = progress === 100 && stage.tasks.length > 0;
+              const isShortcutTarget = stage.id === shortcutStageId;
 
               return (
                 <li
@@ -702,6 +757,7 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
                     draggedStageId === stage.id ? "is-dragging" : "",
                     dragOverStageId === stage.id ? "is-drop-target" : "",
                     isComplete ? "is-complete" : "",
+                    isShortcutTarget ? "is-shortcut-target" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -737,8 +793,14 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
                     <button
                       className="stage-title-button"
                       type="button"
-                      onClick={() => toggleCollapse(stage.id)}
+                      onClick={() => {
+                        setFocusedStageId(stage.id);
+                        toggleCollapse(stage.id);
+                      }}
+                      onFocus={() => setFocusedStageId(stage.id)}
                       aria-expanded={!isCollapsed}
+                      aria-pressed={isShortcutTarget}
+                      data-keyboard-item
                     >
                       <span className="stage-name">{stage.name}</span>
                       <span
@@ -813,6 +875,9 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
                       </span>
                     </div>
                     <span className="stage-progress-value">
+                      {isShortcutTarget && (
+                        <span className="stage-shortcut-badge">Shortcut focus</span>
+                      )}
                       {progress}%
                       {isComplete && <span className="stage-complete-badge">Done ✓</span>}
                     </span>
@@ -1075,7 +1140,11 @@ export default function GoalDetail({ personName, theme, goalId }: GoalDetailProp
               </button>
             </div>
 
-            <form className="stack-form" onSubmit={submitTask}>
+            <form
+              ref={taskFormElementRef}
+              className="stack-form"
+              onSubmit={submitTask}
+            >
               <label className="goal-field">
                 <span>Task name</span>
                 <input

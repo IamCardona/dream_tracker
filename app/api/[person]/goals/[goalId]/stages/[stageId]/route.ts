@@ -35,13 +35,17 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 
@@ -55,7 +59,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
   }
 }
 
-/** Removes a stage (and all of its tasks), then compacts the remaining order. */
+/** Soft-deletes a stage (and its tasks), then compacts the active stage order. */
 export async function DELETE(_request: Request, { params }: RouteContext) {
   const { person, goalId, stageId } = await params;
   if (!isGoalPerson(person)) {
@@ -67,20 +71,28 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 
-    stage.deleteOne();
+    stage.is_deleted = true;
+    for (const task of stage.tasks) {
+      task.is_deleted = true;
+    }
 
-    // Keep `order` values contiguous after the removal.
+    // Keep active stage order values contiguous without removing history.
     [...goal.stages]
+      .filter((remaining) => remaining.is_deleted !== true)
       .sort((a, b) => a.order - b.order)
       .forEach((remaining, index) => {
         remaining.order = index;

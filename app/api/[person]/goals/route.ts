@@ -19,7 +19,9 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goals = await Goal.find({ person }).sort({ updatedAt: -1 });
+    const goals = await Goal.find({ person, is_deleted: { $ne: true } }).sort({
+      updatedAt: -1,
+    });
     return Response.json({ goals: goals.map(serializeGoal) });
   } catch (error) {
     return databaseUnavailable("load", error);

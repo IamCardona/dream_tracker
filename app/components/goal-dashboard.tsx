@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
+import KeyboardShortcutGuide from "./keyboard-shortcut-guide";
 import {
   useEffect,
   useRef,
@@ -256,6 +257,15 @@ export default function GoalDashboard({
   return (
     <main className={`profile-page profile-page--${theme} dashboard-page`}>
       <div className="profile-glow" aria-hidden="true" />
+      <KeyboardShortcutGuide
+        backHref="/"
+        shortcuts={[
+          { keys: ["Tab"], description: "Move through goals" },
+          { keys: ["↑", "↓"], description: "Choose a goal" },
+          { keys: ["Enter"], description: "Open selected goal" },
+          { keys: ["Ctrl", "←"], description: "Back to users" },
+        ]}
+      />
       <header className="profile-header dashboard-header">
         <Link className="home-link" href="/" aria-label="Back to home" title="Back to home">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -308,7 +318,7 @@ export default function GoalDashboard({
         {isLoading ? (
           <p className="empty-goals">Loading your goals...</p>
         ) : goals.length > 0 ? (
-          <ul className="goal-list">
+          <ul className="goal-list" data-keyboard-menu>
             {goals.map((goal) => (
               <li
                 className="goal-list-item"
@@ -320,6 +330,7 @@ export default function GoalDashboard({
                   href={`/${theme}/goals/${goal.id}`}
                   aria-label={`Open goal: ${goal.name}`}
                   title={`Open ${goal.name}`}
+                  data-keyboard-item
                 >
                   <span className="goal-emoji" aria-hidden="true">{goal.emoji}</span>
                   <span className="goal-copy">

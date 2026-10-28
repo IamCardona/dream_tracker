@@ -36,19 +36,22 @@ export type SerializedGoal = {
  */
 export function serializeGoal(goal: GoalDocument): SerializedGoal {
   const stages = [...(goal.stages ?? [])]
+    .filter((stage) => stage.is_deleted !== true)
     .sort((a, b) => a.order - b.order)
     .map((stage) => ({
       id: stage._id.toString(),
       name: stage.name,
       description: stage.description ?? "",
       order: stage.order,
-      tasks: [...(stage.tasks ?? [])].map((task) => ({
-        id: task._id.toString(),
-        name: task.name,
-        description: task.description ?? "",
-        dueDate: task.dueDate ?? null,
-        isCompleted: Boolean(task.isCompleted),
-      })),
+      tasks: [...(stage.tasks ?? [])]
+        .filter((task) => task.is_deleted !== true)
+        .map((task) => ({
+          id: task._id.toString(),
+          name: task.name,
+          description: task.description ?? "",
+          dueDate: task.dueDate ?? null,
+          isCompleted: Boolean(task.isCompleted),
+        })),
     }));
 
   return {

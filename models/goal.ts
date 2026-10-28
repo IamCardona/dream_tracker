@@ -12,6 +12,7 @@ export interface TaskItem {
   description: string;
   dueDate: string | null;
   isCompleted: boolean;
+  is_deleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +22,7 @@ export interface StageItem {
   name: string;
   description: string;
   order: number;
+  is_deleted: boolean;
   tasks: Types.DocumentArray<TaskItem>;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +36,7 @@ export interface GoalDocument extends mongoose.Document {
   dueDate: string;
   successDefinition: string;
   color: string;
+  is_deleted: boolean;
   stages: Types.DocumentArray<StageItem>;
   createdAt: Date;
   updatedAt: Date;
@@ -66,6 +69,10 @@ const taskSchema = new Schema<TaskItem>(
       type: Boolean,
       default: false,
     },
+    is_deleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true, versionKey: false, _id: true },
 );
@@ -88,6 +95,10 @@ const stageSchema = new Schema<StageItem>(
       type: Number,
       required: true,
       min: 0,
+    },
+    is_deleted: {
+      type: Boolean,
+      default: false,
     },
     tasks: {
       type: [taskSchema],
@@ -138,6 +149,10 @@ const goalSchema = new Schema<GoalDocument>(
       required: true,
       uppercase: true,
       match: /^#(?:[0-9A-F]{3}|[0-9A-F]{6})$/,
+    },
+    is_deleted: {
+      type: Boolean,
+      default: false,
     },
     stages: {
       type: [stageSchema],

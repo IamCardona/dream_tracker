@@ -23,7 +23,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
@@ -58,7 +62,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
   try {
     await connectToDatabase();
     const goal = await Goal.findOneAndUpdate(
-      { _id: goalId, person },
+      { _id: goalId, person, is_deleted: { $ne: true } },
       { $set: validation.value },
       { new: true, runValidators: true },
     );
@@ -73,7 +77,7 @@ export async function PUT(request: Request, { params }: RouteContext) {
   }
 }
 
-/** Deletes a goal along with every stage and task it contains. */
+/** Soft-deletes a goal along with every stage and task it contains. */
 export async function DELETE(_request: Request, { params }: RouteContext) {
   const { person, goalId } = await params;
   if (!isGoalPerson(person)) {
@@ -85,11 +89,24 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOneAndDelete({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
+    goal.is_deleted = true;
+    for (const stage of goal.stages) {
+      stage.is_deleted = true;
+      for (const task of stage.tasks) {
+        task.is_deleted = true;
+      }
+    }
+
+    await goal.save();
     return Response.json({ id: goalId });
   } catch (error) {
     return databaseUnavailable("delete", error);

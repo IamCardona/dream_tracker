@@ -77,7 +77,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     await connectToDatabase();
     if (operations.length > 0) await Goal.bulkWrite(operations);
 
-    const goals = await Goal.find({ person }).sort({ updatedAt: -1 });
+    const goals = await Goal.find({ person, is_deleted: { $ne: true } }).sort({
+      updatedAt: -1,
+    });
     return Response.json({ goals: goals.map(serializeGoal) });
   } catch (error) {
     return databaseUnavailable("migrate locally saved", error);

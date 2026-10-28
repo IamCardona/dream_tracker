@@ -40,18 +40,22 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 
     const task = stage.tasks.id(taskId);
-    if (!task) {
+    if (!task || task.is_deleted === true) {
       return Response.json({ error: "Task not found." }, { status: 404 });
     }
 
@@ -94,18 +98,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 
     const task = stage.tasks.id(taskId);
-    if (!task) {
+    if (!task || task.is_deleted === true) {
       return Response.json({ error: "Task not found." }, { status: 404 });
     }
 
@@ -118,7 +126,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   }
 }
 
-/** Removes a task from its stage. */
+/** Soft-deletes a task from its stage. */
 export async function DELETE(_request: Request, { params }: RouteContext) {
   const { person, goalId, stageId, taskId } = await params;
   if (!isGoalPerson(person)) {
@@ -130,22 +138,26 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
   try {
     await connectToDatabase();
-    const goal = await Goal.findOne({ _id: goalId, person });
+    const goal = await Goal.findOne({
+      _id: goalId,
+      person,
+      is_deleted: { $ne: true },
+    });
     if (!goal) {
       return Response.json({ error: "Goal not found." }, { status: 404 });
     }
 
     const stage = goal.stages.id(stageId);
-    if (!stage) {
+    if (!stage || stage.is_deleted === true) {
       return Response.json({ error: "Stage not found." }, { status: 404 });
     }
 
     const task = stage.tasks.id(taskId);
-    if (!task) {
+    if (!task || task.is_deleted === true) {
       return Response.json({ error: "Task not found." }, { status: 404 });
     }
 
-    task.deleteOne();
+    task.is_deleted = true;
 
     await goal.save();
     return Response.json({ goal: serializeGoal(goal) });
